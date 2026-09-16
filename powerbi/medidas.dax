@@ -1,0 +1,52 @@
+-- Medidas principais para o dashboard
+
+Cabeças Exportadas =
+SUM ( fato_exportacao_bovinos[cabecas_exportadas] )
+
+Valor FOB USD =
+SUM ( fato_exportacao_bovinos[valor_fob_usd] )
+
+Peso Líquido Kg =
+SUM ( fato_exportacao_bovinos[kg_liquido] )
+
+Valor Médio USD por Cabeça =
+DIVIDE ( [Valor FOB USD], [Cabeças Exportadas] )
+
+Peso Médio Kg por Cabeça =
+DIVIDE ( [Peso Líquido Kg], [Cabeças Exportadas] )
+
+Rebanho Bovino =
+SUM ( fato_rebanho_bovino[rebanho_bovino_cabecas] )
+
+Exportações % do Rebanho =
+DIVIDE ( [Cabeças Exportadas], [Rebanho Bovino] )
+
+Rebanho por Cabeça Exportada =
+DIVIDE ( [Rebanho Bovino], [Cabeças Exportadas] )
+
+Valor FOB Ano Anterior =
+CALCULATE ( [Valor FOB USD], DATEADD ( dCalendario[Data], -1, YEAR ) )
+
+Variação FOB YoY % =
+DIVIDE ( [Valor FOB USD] - [Valor FOB Ano Anterior], [Valor FOB Ano Anterior] )
+
+Cabeças Ano Anterior =
+CALCULATE ( [Cabeças Exportadas], DATEADD ( dCalendario[Data], -1, YEAR ) )
+
+Variação Cabeças YoY % =
+DIVIDE ( [Cabeças Exportadas] - [Cabeças Ano Anterior], [Cabeças Ano Anterior] )
+
+Participação Destino % =
+DIVIDE (
+    [Valor FOB USD],
+    CALCULATE ( [Valor FOB USD], ALLSELECTED ( fato_exportacao_bovinos[pais_destino] ) )
+)
+
+Ranking País por FOB =
+RANKX (
+    ALLSELECTED ( fato_exportacao_bovinos[pais_destino] ),
+    [Valor FOB USD],
+    ,
+    DESC,
+    DENSE
+)
