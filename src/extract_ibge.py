@@ -14,7 +14,7 @@ from config import (
 
 def extract_bovine_herd(start_year: int, end_year: int) -> pd.DataFrame:
     """Extrai efetivo bovino anual por UF na PPM/SIDRA tabela 3939."""
-    periods = f"{start_year}-{end_year}"
+    periods = ",".join(str(year) for year in range(start_year, end_year + 1))
     url = (
         f"{SIDRA_BASE_URL}/t/{SIDRA_TABLE}/n3/all/u/y/v/{SIDRA_VARIABLE}"
         f"/p/{periods}/c{SIDRA_HERD_CLASSIFICATION}/{SIDRA_BOVINE_CODE}/f/u"
