@@ -12,7 +12,11 @@ on:
     - cron: "20 10 8 * *"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: cattle-export-data-main
+  cancel-in-progress: false
 
 jobs:
   build-data:
@@ -60,13 +64,47 @@ jobs:
           assert exports['ano'].max() >= 2025
           assert exports['valor_fob_usd'].sum() > 0
           assert exports['cabecas_exportadas'].sum() > 0
+          assert 'data' in exports.columns
           print('Validação básica concluída.')
+          PY
+
+      - name: Build dynamic dashboard dataset
+        run: python src/build_dashboard_data.py
+
+      - name: Validate dashboard JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('dashboard/data.json')
+          assert path.exists(), 'dashboard/data.json não foi gerado'
+          data = json.loads(path.read_text(encoding='utf-8'))
+          for key in ['meta', 'y', 'd', 'u', 'r', 'm', 'h']:
+              assert key in data, f'Chave ausente: {key}'
+          assert data['y'], 'Série anual vazia'
+          assert data['meta']['closed_year'] >= 2025
+          print('Dashboard JSON validado:', data['meta'])
           PY
 
       - name: Upload Power BI-ready datasets
         uses: actions/upload-artifact@v4
         with:
           name: cattle-export-powerbi-data
-          path: data/processed/*.csv
+          path: |
+            data/processed/*.csv
+            dashboard/data.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish latest dashboard data to repository
+        run: |
+          if git diff --quiet -- dashboard/data.json; then
+            echo "dashboard/data.json já está atualizado."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dashboard/data.json
+          git commit -m "data: refresh cattle export dashboard [skip ci]"
+          git push origin HEAD:main
