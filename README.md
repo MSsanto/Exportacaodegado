@@ -36,6 +36,18 @@ Em 2025, o **Pará** liderou as exportações com **598.087 cabeças** e aproxim
 
 Os resultados detalhados estão em [`docs/resultados_validados.md`](docs/resultados_validados.md), e a série anual compacta está em [`data/published/resumo_anual.csv`](data/published/resumo_anual.csv).
 
+## Dashboard web para portfólio
+
+Além do modelo Power BI, o repositório inclui uma versão web interativa e responsiva em [`dashboard/index.html`](dashboard/index.html). Ela usa os mesmos resultados validados e reproduz as cinco áreas analíticas do projeto:
+
+1. Visão Geral
+2. Destinos
+3. Brasil / Regiões
+4. Evolução histórica
+5. 2026 YTD
+
+Essa versão pode ser publicada diretamente em hospedagem estática e será usada na integração com o site principal do portfólio.
+
 ## Stack
 
 - Python
@@ -46,6 +58,7 @@ Os resultados detalhados estão em [`docs/resultados_validados.md`](docs/resulta
 - GitHub Actions
 - Power BI
 - DAX
+- HTML / CSS / JavaScript
 - Git/GitHub
 
 ## Fontes oficiais
@@ -106,6 +119,8 @@ Exportacaodegado/
 │       └── data-pipeline.yml
 ├── analysis/
 │   └── statistical_analysis.py
+├── dashboard/
+│   └── index.html
 ├── data/
 │   ├── raw/
 │   ├── processed/
@@ -115,7 +130,9 @@ Exportacaodegado/
 │   ├── metodologia.md
 │   └── resultados_validados.md
 ├── powerbi/
+│   ├── dimensoes.dax
 │   ├── medidas.dax
+│   ├── power_query.md
 │   └── modelo.md
 ├── src/
 │   ├── config.py
@@ -183,7 +200,7 @@ O projeto prevê cinco páginas:
 4. **Evolução Histórica**
 5. **2026 YTD**
 
-As medidas DAX estão em `powerbi/medidas.dax` e a especificação visual/modelagem em `powerbi/modelo.md`.
+As medidas DAX estão em `powerbi/medidas.dax`, as dimensões em `powerbi/dimensoes.dax`, as consultas Power Query em `powerbi/power_query.md` e a especificação visual/modelagem em `powerbi/modelo.md`.
 
 ## Escopo NCM
 
@@ -202,9 +219,8 @@ O GitHub Actions:
 
 ## Próximas evoluções
 
-- construir o arquivo `.pbix`;
-- adicionar screenshots do dashboard ao repositório;
-- publicar uma versão web integrada ao portfólio;
+- construir e publicar o arquivo `.pbix` no Power BI Desktop;
+- integrar `dashboard/index.html` ao site principal do portfólio;
 - adicionar comparação com exportação de carne bovina em uma fase separada.
 
 ## Autor
