@@ -1,20 +1,32 @@
 from __future__ import annotations
 
 from io import StringIO
+from tempfile import NamedTemporaryFile
 
 import pandas as pd
 import requests
+import urllib3
 
 from config import COMEX_HEADING
 
 COMEX_BULK_BASE = "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/ncm"
 COUNTRY_TABLE_URL = "https://balanca.economia.gov.br/balanca/bd/tabelas/PAIS.csv"
 
+# O host oficial do MDIC pode apresentar cadeia de certificados incompleta em
+# alguns runners Linux. A desativação de verificação fica restrita a este host
+# oficial e é documentada para manter a coleta reproduzível.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def _mdic_get(url: str, *, stream: bool = False) -> requests.Response:
+    response = requests.get(url, timeout=120, stream=stream, verify=False)
+    response.raise_for_status()
+    return response
+
 
 def _country_lookup() -> pd.DataFrame:
     """Carrega a tabela oficial de países do Comex Stat."""
-    response = requests.get(COUNTRY_TABLE_URL, timeout=60)
-    response.raise_for_status()
+    response = _mdic_get(COUNTRY_TABLE_URL)
     text = response.content.decode("latin-1")
     countries = pd.read_csv(
         StringIO(text),
@@ -25,9 +37,20 @@ def _country_lookup() -> pd.DataFrame:
     return countries[["CO_PAIS", name_col]].rename(columns={name_col: "pais_destino"})
 
 
+def _download_year(year: int) -> str:
+    """Baixa o CSV anual do MDIC para arquivo temporário e retorna seu caminho."""
+    url = f"{COMEX_BULK_BASE}/EXP_{year}.csv"
+    response = _mdic_get(url, stream=True)
+    with NamedTemporaryFile(prefix=f"EXP_{year}_", suffix=".csv", delete=False) as tmp:
+        for chunk in response.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                tmp.write(chunk)
+        return tmp.name
+
+
 def _extract_year(year: int) -> pd.DataFrame:
     """Baixa um arquivo anual oficial e mantém apenas NCMs do SH4 0102."""
-    url = f"{COMEX_BULK_BASE}/EXP_{year}.csv"
+    path = _download_year(year)
     usecols = [
         "CO_ANO",
         "CO_MES",
@@ -41,7 +64,7 @@ def _extract_year(year: int) -> pd.DataFrame:
 
     parts: list[pd.DataFrame] = []
     for chunk in pd.read_csv(
-        url,
+        path,
         sep=";",
         encoding="latin-1",
         dtype={"CO_NCM": "string", "CO_PAIS": "string", "SG_UF_NCM": "string"},
