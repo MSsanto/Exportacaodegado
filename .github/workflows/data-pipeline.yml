@@ -1,0 +1,72 @@
+name: Build cattle export dataset
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "requirements.txt"
+      - ".github/workflows/data-pipeline.yml"
+  schedule:
+    - cron: "20 10 8 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  build-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run official-data pipeline
+        run: python src/run_pipeline.py
+
+      - name: Validate generated datasets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+
+          base = Path('data/processed')
+          required = [
+              'fato_exportacao_bovinos.csv',
+              'fato_rebanho_bovino.csv',
+              'resumo_regional_anual.csv',
+              'resumo_destinos_anual.csv',
+          ]
+          for name in required:
+              path = base / name
+              assert path.exists(), f'Arquivo ausente: {path}'
+              df = pd.read_csv(path)
+              assert not df.empty, f'Arquivo vazio: {path}'
+              print(f'{name}: {len(df):,} linhas')
+
+          exports = pd.read_csv(base / 'fato_exportacao_bovinos.csv')
+          assert exports['ano'].min() <= 2020
+          assert exports['ano'].max() >= 2025
+          assert exports['valor_fob_usd'].sum() > 0
+          assert exports['cabecas_exportadas'].sum() > 0
+          print('Validação básica concluída.')
+          PY
+
+      - name: Upload Power BI-ready datasets
+        uses: actions/upload-artifact@v4
+        with:
+          name: cattle-export-powerbi-data
+          path: data/processed/*.csv
+          if-no-files-found: error
+          retention-days: 30
