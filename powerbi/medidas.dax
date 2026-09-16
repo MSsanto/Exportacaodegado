@@ -3,8 +3,11 @@
 -- Modelo esperado:
 -- dCalendario[Data] 1:* fato_exportacao_bovinos[data]
 -- dUF[uf]           1:* fatos de exportação e rebanho
--- dPais[pais]       1:* fato_exportacao_bovinos[pais_destino]
+-- dPais[pais_destino] 1:* fato_exportacao_bovinos[pais_destino]
 -- dNCM[ncm]         1:* fato_exportacao_bovinos[ncm]
+--
+-- O rebanho é estoque anual. Não há relacionamento físico entre calendário
+-- mensal e fato_rebanho; as medidas aplicam o ano com TREATAS.
 -- ============================================================
 
 Cabeças Exportadas =
@@ -22,14 +25,47 @@ DIVIDE ( [Valor FOB USD], [Cabeças Exportadas] )
 Peso Médio Kg por Cabeça =
 DIVIDE ( [Peso Líquido Kg], [Cabeças Exportadas] )
 
+Ano Rebanho em Contexto =
+VAR AnoFiltro = SELECTEDVALUE ( dCalendario[Ano] )
+VAR UltimoAnoDisponivel =
+    CALCULATE (
+        MAX ( fato_rebanho_bovino[ano] ),
+        REMOVEFILTERS ( dCalendario )
+    )
+RETURN
+    IF (
+        NOT ISBLANK ( AnoFiltro ) && AnoFiltro <= UltimoAnoDisponivel,
+        AnoFiltro,
+        UltimoAnoDisponivel
+    )
+
 Rebanho Bovino =
-SUM ( fato_rebanho_bovino[rebanho_bovino_cabecas] )
+VAR AnoRebanho = [Ano Rebanho em Contexto]
+RETURN
+    CALCULATE (
+        SUM ( fato_rebanho_bovino[rebanho_bovino_cabecas] ),
+        TREATAS ( { AnoRebanho }, fato_rebanho_bovino[ano] )
+    )
 
 Exportações % do Rebanho =
-DIVIDE ( [Cabeças Exportadas], [Rebanho Bovino] )
+VAR AnoExportacao = SELECTEDVALUE ( dCalendario[Ano] )
+VAR AnoRebanho = [Ano Rebanho em Contexto]
+RETURN
+    IF (
+        AnoExportacao = AnoRebanho,
+        DIVIDE ( [Cabeças Exportadas], [Rebanho Bovino] ),
+        BLANK ()
+    )
 
 Rebanho por Cabeça Exportada =
-DIVIDE ( [Rebanho Bovino], [Cabeças Exportadas] )
+VAR AnoExportacao = SELECTEDVALUE ( dCalendario[Ano] )
+VAR AnoRebanho = [Ano Rebanho em Contexto]
+RETURN
+    IF (
+        AnoExportacao = AnoRebanho,
+        DIVIDE ( [Rebanho Bovino], [Cabeças Exportadas] ),
+        BLANK ()
+    )
 
 -- Inteligência temporal -----------------------------------------------------
 
@@ -122,15 +158,14 @@ RANKX (
 -- Indicadores auxiliares ---------------------------------------------------
 
 Máximo Mês com Dados =
-MAX ( dCalendario[Data] )
+MAX ( fato_exportacao_bovinos[data] )
 
 Texto Período Selecionado =
-VAR DataMax = MAX ( dCalendario[Data] )
+VAR DataMax = [Máximo Mês com Dados]
 VAR AnoMax = YEAR ( DataMax )
-VAR MesMax = MONTH ( DataMax )
 RETURN
     IF (
         AnoMax = 2026,
-        "Jan–" & FORMAT ( DataMax, "mmm" ) & "/" & AnoMax,
+        "Jan–" & FORMAT ( DataMax, "mmm" ) & "/" & FORMAT ( AnoMax, "0" ),
         FORMAT ( AnoMax, "0" )
     )
