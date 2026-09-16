@@ -47,6 +47,19 @@ def transform_exports(df: pd.DataFrame) -> pd.DataFrame:
     out["uf"] = out["uf"].map(state_code)
     out["regiao"] = out["uf"].map(UF_TO_REGION)
     out["categoria_bovina"] = out["ncm"].map(classify_ncm)
+
+    # Chave mensal para relacionar a fato à dimensão calendário no Power BI.
+    # O primeiro dia do mês representa a competência do registro, não o dia
+    # efetivo do embarque.
+    out["data"] = pd.to_datetime(
+        {
+            "year": pd.to_numeric(out["ano"], errors="coerce"),
+            "month": pd.to_numeric(out["mes"], errors="coerce"),
+            "day": 1,
+        },
+        errors="coerce",
+    )
+
     out["valor_medio_usd_cabeca"] = out["valor_fob_usd"] / out["cabecas_exportadas"].replace(0, pd.NA)
     out["kg_medio_cabeca"] = out["kg_liquido"] / out["cabecas_exportadas"].replace(0, pd.NA)
     return out
