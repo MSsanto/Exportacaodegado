@@ -1,4 +1,14 @@
--- Medidas principais para o dashboard
+-- ============================================================
+-- Brazilian Live Cattle Exports — medidas principais
+-- Modelo esperado:
+-- dCalendario[Data] 1:* fato_exportacao_bovinos[data]
+-- dUF[uf]           1:* fatos de exportação e rebanho
+-- dPais[pais_destino] 1:* fato_exportacao_bovinos[pais_destino]
+-- dNCM[ncm]         1:* fato_exportacao_bovinos[ncm]
+--
+-- O rebanho é estoque anual. Não há relacionamento físico entre calendário
+-- mensal e fato_rebanho; as medidas aplicam o ano com TREATAS.
+-- ============================================================
 
 Cabeças Exportadas =
 SUM ( fato_exportacao_bovinos[cabecas_exportadas] )
@@ -15,38 +25,147 @@ DIVIDE ( [Valor FOB USD], [Cabeças Exportadas] )
 Peso Médio Kg por Cabeça =
 DIVIDE ( [Peso Líquido Kg], [Cabeças Exportadas] )
 
+Ano Rebanho em Contexto =
+VAR AnoFiltro = SELECTEDVALUE ( dCalendario[Ano] )
+VAR UltimoAnoDisponivel =
+    CALCULATE (
+        MAX ( fato_rebanho_bovino[ano] ),
+        REMOVEFILTERS ( dCalendario )
+    )
+RETURN
+    IF (
+        NOT ISBLANK ( AnoFiltro ) && AnoFiltro <= UltimoAnoDisponivel,
+        AnoFiltro,
+        UltimoAnoDisponivel
+    )
+
 Rebanho Bovino =
-SUM ( fato_rebanho_bovino[rebanho_bovino_cabecas] )
+VAR AnoRebanho = [Ano Rebanho em Contexto]
+RETURN
+    CALCULATE (
+        SUM ( fato_rebanho_bovino[rebanho_bovino_cabecas] ),
+        TREATAS ( { AnoRebanho }, fato_rebanho_bovino[ano] )
+    )
 
 Exportações % do Rebanho =
-DIVIDE ( [Cabeças Exportadas], [Rebanho Bovino] )
+VAR AnoExportacao = SELECTEDVALUE ( dCalendario[Ano] )
+VAR AnoRebanho = [Ano Rebanho em Contexto]
+RETURN
+    IF (
+        AnoExportacao = AnoRebanho,
+        DIVIDE ( [Cabeças Exportadas], [Rebanho Bovino] ),
+        BLANK ()
+    )
 
 Rebanho por Cabeça Exportada =
-DIVIDE ( [Rebanho Bovino], [Cabeças Exportadas] )
+VAR AnoExportacao = SELECTEDVALUE ( dCalendario[Ano] )
+VAR AnoRebanho = [Ano Rebanho em Contexto]
+RETURN
+    IF (
+        AnoExportacao = AnoRebanho,
+        DIVIDE ( [Rebanho Bovino], [Cabeças Exportadas] ),
+        BLANK ()
+    )
+
+-- Inteligência temporal -----------------------------------------------------
 
 Valor FOB Ano Anterior =
-CALCULATE ( [Valor FOB USD], DATEADD ( dCalendario[Data], -1, YEAR ) )
+CALCULATE (
+    [Valor FOB USD],
+    DATEADD ( dCalendario[Data], -1, YEAR )
+)
 
 Variação FOB YoY % =
-DIVIDE ( [Valor FOB USD] - [Valor FOB Ano Anterior], [Valor FOB Ano Anterior] )
+DIVIDE (
+    [Valor FOB USD] - [Valor FOB Ano Anterior],
+    [Valor FOB Ano Anterior]
+)
 
 Cabeças Ano Anterior =
-CALCULATE ( [Cabeças Exportadas], DATEADD ( dCalendario[Data], -1, YEAR ) )
+CALCULATE (
+    [Cabeças Exportadas],
+    DATEADD ( dCalendario[Data], -1, YEAR )
+)
 
 Variação Cabeças YoY % =
-DIVIDE ( [Cabeças Exportadas] - [Cabeças Ano Anterior], [Cabeças Ano Anterior] )
+DIVIDE (
+    [Cabeças Exportadas] - [Cabeças Ano Anterior],
+    [Cabeças Ano Anterior]
+)
+
+Valor FOB YTD =
+TOTALYTD ( [Valor FOB USD], dCalendario[Data] )
+
+Cabeças YTD =
+TOTALYTD ( [Cabeças Exportadas], dCalendario[Data] )
+
+Valor FOB YTD Ano Anterior =
+CALCULATE (
+    [Valor FOB YTD],
+    DATEADD ( dCalendario[Data], -1, YEAR )
+)
+
+Cabeças YTD Ano Anterior =
+CALCULATE (
+    [Cabeças YTD],
+    DATEADD ( dCalendario[Data], -1, YEAR )
+)
+
+Variação FOB YTD YoY % =
+DIVIDE (
+    [Valor FOB YTD] - [Valor FOB YTD Ano Anterior],
+    [Valor FOB YTD Ano Anterior]
+)
+
+Variação Cabeças YTD YoY % =
+DIVIDE (
+    [Cabeças YTD] - [Cabeças YTD Ano Anterior],
+    [Cabeças YTD Ano Anterior]
+)
+
+-- Participação e ranking ---------------------------------------------------
 
 Participação Destino % =
 DIVIDE (
     [Valor FOB USD],
-    CALCULATE ( [Valor FOB USD], ALLSELECTED ( fato_exportacao_bovinos[pais_destino] ) )
+    CALCULATE ( [Valor FOB USD], REMOVEFILTERS ( dPais ) )
+)
+
+Participação Região % Cabeças =
+DIVIDE (
+    [Cabeças Exportadas],
+    CALCULATE ( [Cabeças Exportadas], REMOVEFILTERS ( dUF[regiao] ) )
 )
 
 Ranking País por FOB =
 RANKX (
-    ALLSELECTED ( fato_exportacao_bovinos[pais_destino] ),
+    ALLSELECTED ( dPais[pais_destino] ),
     [Valor FOB USD],
     ,
     DESC,
     DENSE
 )
+
+Ranking UF por Cabeças =
+RANKX (
+    ALLSELECTED ( dUF[uf] ),
+    [Cabeças Exportadas],
+    ,
+    DESC,
+    DENSE
+)
+
+-- Indicadores auxiliares ---------------------------------------------------
+
+Máximo Mês com Dados =
+MAX ( fato_exportacao_bovinos[data] )
+
+Texto Período Selecionado =
+VAR DataMax = [Máximo Mês com Dados]
+VAR AnoMax = YEAR ( DataMax )
+RETURN
+    IF (
+        AnoMax = 2026,
+        "Jan–" & FORMAT ( DataMax, "mmm" ) & "/" & FORMAT ( AnoMax, "0" ),
+        FORMAT ( AnoMax, "0" )
+    )

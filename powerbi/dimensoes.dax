@@ -1,0 +1,62 @@
+-- Dimensões calculadas para o modelo estrela
+
+-- 1) Calendário diário. A fato de exportação se relaciona pelo primeiro dia do mês.
+dCalendario =
+VAR CalendarioBase = CALENDAR ( DATE ( 2020, 1, 1 ), DATE ( 2026, 12, 31 ) )
+RETURN
+    SELECTCOLUMNS (
+        CalendarioBase,
+        "Data", [Date],
+        "Ano", YEAR ( [Date] ),
+        "MesNumero", MONTH ( [Date] ),
+        "Mes", FORMAT ( [Date], "mmm" ),
+        "AnoMes", FORMAT ( [Date], "YYYY-MM" ),
+        "Trimestre", "T" & FORMAT ( [Date], "Q" )
+    )
+
+-- Marque dCalendario como Tabela de Datas usando dCalendario[Data].
+-- Ordene dCalendario[Mes] por dCalendario[MesNumero].
+
+-- 2) UF compartilhada entre fatos de exportação e rebanho.
+dUF =
+DISTINCT (
+    UNION (
+        SELECTCOLUMNS (
+            fato_exportacao_bovinos,
+            "uf", fato_exportacao_bovinos[uf],
+            "regiao", fato_exportacao_bovinos[regiao]
+        ),
+        SELECTCOLUMNS (
+            fato_rebanho_bovino,
+            "uf", fato_rebanho_bovino[uf],
+            "regiao", fato_rebanho_bovino[regiao]
+        )
+    )
+)
+
+-- 3) País de destino.
+dPais =
+DISTINCT (
+    SELECTCOLUMNS (
+        fato_exportacao_bovinos,
+        "pais_destino", fato_exportacao_bovinos[pais_destino]
+    )
+)
+
+-- 4) NCM e categoria bovina.
+dNCM =
+DISTINCT (
+    SELECTCOLUMNS (
+        fato_exportacao_bovinos,
+        "ncm", fato_exportacao_bovinos[ncm],
+        "categoria_bovina", fato_exportacao_bovinos[categoria_bovina]
+    )
+)
+
+-- Relacionamentos (direção única, dimensão -> fato):
+-- dCalendario[Data] 1:* fato_exportacao_bovinos[data]
+-- dUF[uf] 1:* fato_exportacao_bovinos[uf]
+-- dUF[uf] 1:* fato_rebanho_bovino[uf]
+-- dPais[pais_destino] 1:* fato_exportacao_bovinos[pais_destino]
+-- dNCM[ncm] 1:* fato_exportacao_bovinos[ncm]
+-- Não criar relacionamento fato-fato.
